@@ -25,6 +25,7 @@ shinyServer(function(input, output, session) {
     range_marker_data <-NULL
     #the loops we will show in the plot
     range_loop_data <-NULL
+    sel_samples_only_data <- NULL
     
     #the markers we want to show in the plot
     custom_marker_data <- NULL
@@ -128,7 +129,7 @@ shinyServer(function(input, output, session) {
         end <- as.numeric(input$endInput)
 
         #filter data by the selected samples
-        sel_samples_only_data <- loaded_bedpe[loaded_bedpe$sample_name %in% input$sampleSelect]
+        sel_samples_only_data <<- loaded_bedpe[loaded_bedpe$sample_name %in% input$sampleSelect]
         
         #then filter for loops whose x1, x2, y1, and y2 are all within the range
         range_loop_data <<- sel_samples_only_data[which((sel_samples_only_data$x1>=start & sel_samples_only_data$x1<=end) & (sel_samples_only_data$x2>=start & sel_samples_only_data$x2<=end) &(sel_samples_only_data$y1>=start & sel_samples_only_data$y1<=end) &(sel_samples_only_data$y2>=start & sel_samples_only_data$y2<=end))]
@@ -365,7 +366,8 @@ shinyServer(function(input, output, session) {
                      if(input$sampleRadio!="Group Samples")
                      {
                          
-                         count_range_loop_data <- range_loop_data %>% group_by(chr1,x1,x2,chr2,y1,y2) %>% mutate(test_count = n())
+                         #count_range_loop_data <- range_loop_data %>% group_by(chr1,x1,x2,chr2,y1,y2) %>% mutate(test_count = n())
+                         count_range_loop_data <- sel_samples_only_data %>% group_by(chr1,x1,x2,chr2,y1,y2) %>% mutate(test_count = n())
                          count_range_loop_data <- count_range_loop_data %>% group_by(chr1,x1,x2,chr2,y1,y2,test_count) %>% mutate(sample_name = paste0(sample_name, collapse="\n,")) %>% mutate(color = input$colorSelect1)
                          #setup json to read color values
                          vega_json[["marks"]][[5]][["encode"]][["update"]][["stroke"]][["field"]] <- "datum.color"
@@ -380,9 +382,12 @@ shinyServer(function(input, output, session) {
                          range_loop_data2 <- sel_samples_only_data2[which((sel_samples_only_data2$x1>=start & sel_samples_only_data2$x1<=end) & (sel_samples_only_data2$x2>=start & sel_samples_only_data2$x2<=end) &(sel_samples_only_data2$y1>=start & sel_samples_only_data2$y1<=end) &(sel_samples_only_data2$y2>=start & sel_samples_only_data2$y2<=end))]
                          
                          #assign group number
-                         group1 <- range_loop_data
+                         #group1 <- range_loop_data
+                         group1 <- sel_samples_only_data
                          group1$group <- 1
-                         group2 <- range_loop_data2
+                         
+                         #group2 <- range_loop_data2
+                         group2 <- sel_samples_only_data2
                          group2$group <- 2
                          #combine group1 and group2, group them by position, combine all the group numbers into one string
                          all_group_data <- rbind(group1,group2) %>% group_by(chr1,x1,x2,chr2,y1,y2) %>% mutate(groups = paste0(group, collapse=";")) 
@@ -400,9 +405,13 @@ shinyServer(function(input, output, session) {
 
                      count_range_loop_data <- unique(count_range_loop_data)
                      
-                     vega_json[["signals"]][[1]][["value"]] <- input$startInput
+                     vega_json[["signals"]][[1]][["value"]] <- info_df$"Min Loop Position:"#input$startInput#min
                      
-                     vega_json[["signals"]][[2]][["value"]] <- input$endInput
+                     vega_json[["signals"]][[2]][["value"]] <- info_df$"Max Loop Position:"#input$endInput#max
+                     
+                     vega_json[["scales"]][[2]][["domain"]][[1]] <- input$startInput
+                     vega_json[["scales"]][[2]][["domain"]][[2]] <- input$endInput
+                     
                      vega_json[["width"]] <- as.numeric(input$widthInput)
                      vega_json[["height"]] <- as.numeric(input$heightInput)
                      vega_json[["data"]][[2]][["values"]] <- create_list_for_json(custom_marker_data)

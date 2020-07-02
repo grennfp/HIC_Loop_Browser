@@ -2,7 +2,13 @@
       "$schema": "https://vega.github.io/schema/vega/v5.json",
       "width": 10000,
       "height": 1000,
-      "padding": 50,
+      "padding": {
+        "top":    200,
+        "left":   0,
+        "bottom": 20,
+        "right":  0
+      },
+      "autosize": "none",
       "background": "white",
       "signals": [
         {
@@ -51,7 +57,7 @@
         },
         {
           "name": "xscale",
-          "clamp": true,
+          "clamp": false,
           "type": "linear",
           "range": [
             0,
