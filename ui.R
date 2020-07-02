@@ -1,3 +1,4 @@
+
 shinyUI(tagList(
     useShinyjs(),
 
@@ -12,10 +13,10 @@ shinyUI(tagList(
                          sidebarLayout(
                              
                              sidebarPanel(
-                                 fluidRow(
-                                     column( p("App may take some time to load the plot after the generate plot button is clicked.\nMousing over loops should show how many samples contained that exact loop, which is also displayed by the thickness of the loop.")
-                                             ,width = 12)
-                                 ),
+                                 h4(tags$a(href='https://github.com/grennfp/HIC_Loop_Browser',target="_blank",'Github')),
+                                 p("This browser shows chromatin interaction regions, or loops, across 20 different dopamineric neuron samples. Positions are based on the hg38 reference genome. Users may click and drag the plot to move the x-axis, and may scroll on the plot to zoom. The plot will need to be regenerated to view loops and genes outside of the initially selected region."),
+                                 
+                                 hr(),
                                  selectInput("fileSelect",label = "Choose a Chromosome File", choices=c("1_all_samples_loops.bedpe")),
                                  
                                  
@@ -75,16 +76,20 @@ shinyUI(tagList(
                                  
                                  h2("Plot Settings:"),
                                  
-                                 h4("height"),
-                                 h5("only applies to the height of the gene/exon display"),
+                                 h4("height (loop region)"),
+                                 textInput(inputId = "loopHeightInput", label = NULL, placeholder = 0, width = "300px", value = 300),
+                                 h4("height (gene/exon display)"),
                                  textInput(inputId = "heightInput", label = NULL, placeholder=0,width = "300px", value=100),
                                  h4("width"),
                                  textInput(inputId = "widthInput", label = NULL, placeholder=0, width = "300px", value=1000),
                                  h4("Number of Base Pair Ticks:"),
+                                 h5("may vary slightly depending on chosen range and zoom."),
                                  textInput(inputId = "ticksInput", label= NULL, placeholder = 0, width = "300px", value = 10),
-                                 
+                                 h4("Arc Width"),
+                                 textOutput(outputId = "arcWidthText"),
+                                 radioButtons(inputId = "arcWidthRadio", label = NULL, choices=c("count","region","set"),selected="count"),
                                  h4("tooltip"),
-                                 h5("show the sample count and/or the sample names for each loop"),
+                                 h5("show the sample count and/or the sample names when mousing over loops"),
                                  checkboxGroupInput(inputId="tooltipSelect",label=NULL,choices=c("Count","Names"),selected="Count"),
                                  h4("colors"),
                                  h5("color of the loops. Group 2 colors only apply if the 'Group Samples' option was selected."),

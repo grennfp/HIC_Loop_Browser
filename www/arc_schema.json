@@ -18,7 +18,154 @@
         {
           "name": "bp_end_range",
           "value": 20580000
+        },
+        {
+      "name": "margin",
+      "value": 20
+    },
+    {
+      "name": "hover",
+      "on": [
+        {"events": "*:mouseover", "encode": "hover"},
+        {"events": "*:mouseout",  "encode": "leave"},
+        {"events": "*:mousedown", "encode": "select"},
+        {"events": "*:mouseup",   "encode": "release"}
+      ]
+    },
+    {
+      "name": "xoffset",
+      "update": "-(height + padding.bottom)"
+    },
+    {
+      "name": "yoffset",
+      "update": "-(width + padding.left)"
+    },
+    { "name": "xrange", "update": "[0, width]" },
+    { "name": "yrange", "update": "[height, 0]" },
+
+    {
+      "name": "down", "value": null,
+      "on": [
+        {"events": "touchend", "update": "null"},
+        {"events": "mousedown, touchstart", "update": "xy()"}
+      ]
+    },
+    {
+      "name": "xcur", "value": null,
+      "on": [
+        {
+          "events": "mousedown, touchstart, touchend",
+          "update": "slice(xdom)"
         }
+      ]
+    },
+    {
+      "name": "ycur", "value": null,
+      "on": [
+        {
+          "events": "mousedown, touchstart, touchend",
+          "update": "slice(ydom)"
+        }
+      ]
+    },
+    {
+      "name": "delta", "value": [0, 0],
+      "on": [
+        {
+          "events": [
+            {
+              "source": "window", "type": "mousemove", "consume": true,
+              "between": [{"type": "mousedown"}, {"source": "window", "type": "mouseup"}]
+            },
+            {
+              "type": "touchmove", "consume": true,
+              "filter": "event.touches.length === 1"
+            }
+          ],
+          "update": "down ? [down[0]-x(), y()-down[1]] : [0,0]"
+        }
+      ]
+    },
+
+    {
+      "name": "anchor", "value": [0, 0],
+      "on": [
+        {
+          "events": "wheel",
+          "update": "[invert('xscale', x()), invert('yscale', y())]"
+        },
+        {
+          "events": {"type": "touchstart", "filter": "event.touches.length===2"},
+          "update": "[(xdom[0] + xdom[1]) / 2, (ydom[0] + ydom[1]) / 2]"
+        }
+      ]
+    },
+    {
+      "name": "zoom", "value": 1,
+      "on": [
+        {
+          "events": "wheel!",
+          "force": true,
+          "update": "pow(1.001, event.deltaY * pow(16, event.deltaMode))"
+        },
+        {
+          "events": {"signal": "dist2"},
+          "force": true,
+          "update": "dist1 / dist2"
+        }
+      ]
+    },
+    {
+      "name": "dist1", "value": 0,
+      "on": [
+        {
+          "events": {"type": "touchstart", "filter": "event.touches.length===2"},
+          "update": "pinchDistance(event)"
+        },
+        {
+          "events": {"signal": "dist2"},
+          "update": "dist2"
+        }
+      ]
+    },
+    {
+      "name": "dist2", "value": 0,
+      "on": [{
+        "events": {"type": "touchmove", "consume": true, "filter": "event.touches.length===2"},
+        "update": "pinchDistance(event)"
+      }]
+    },
+
+    {
+      "name": "xdom", "update": "slice([bp_start_range,bp_end_range])",
+      "on": [
+        {
+          "events": {"signal": "delta"},
+          "update": "[xcur[0] + span(xcur) * delta[0] / width, xcur[1] + span(xcur) * delta[0] / width]"
+        },
+        {
+          "events": {"signal": "zoom"},
+          "update": "[anchor[0] + (xdom[0] - anchor[0]) * zoom, anchor[0] + (xdom[1] - anchor[0]) * zoom]"
+        }
+      ]
+    },
+    {
+      "name": "ydom", "update": "slice([0,1])",
+      "on": [
+        {
+          "events": {"signal": "delta"},
+          "update": "[ycur[0] + span(ycur) * delta[1] / height, ycur[1] + span(ycur) * delta[1] / height]"
+        },
+        {
+          "events": {"signal": "zoom"},
+          "update": "[anchor[1] + (ydom[0] - anchor[1]) * zoom, anchor[1] + (ydom[1] - anchor[1]) * zoom]"
+        }
+      ]
+    },
+    {
+      "name": "size",
+      "update": "clamp(20 / span(xdom), 1, 1000)"
+    }
       ],
       "data": [
         {
@@ -55,25 +202,16 @@
           "range": [30, {"signal": "height"}],
           "domain": {"data": "gene_subset", "field": "transcript"}
         },
+        
         {
-          "name": "xscale",
-          "clamp": false,
-          "type": "linear",
-          "range": [
-            0,
-            {
-              "signal": "width"
-            }
-          ],
-          "domain": [
-            {
-              "signal": "bp_start_range"
-            },
-            {
-              "signal": "bp_end_range"
-            }
-          ],
-          "zero": false
+          "name": "xscale", "zero": false,
+          "domain": {"signal": "xdom"},
+          "range": {"signal": "xrange"}
+        },
+        {
+          "name": "yscale", "zero": false,
+          "domain": {"signal": "ydom"},
+          "range": {"signal": "yrange"}
         }
       ],
       "axes": [
@@ -110,7 +248,11 @@
               "fill": {"value": "steelblue"}
             },
             "update": {
-
+              "y": {"scale": "genescale", "field": "transcript", "offset": 10},
+              "height": {"value": 5},
+              "x": {"scale": "xscale", "field": "bpstart"},
+              "x2": {"scale": "xscale", "field": "bpend"},
+              "fill": {"value": "steelblue"}
             }
           }
         },
@@ -125,6 +267,13 @@
               "x": {"scale": "xscale", "field": "split_exon_start"},
               "x2": {"scale": "xscale", "field": "split_exon_end"},
               "fill": {"value": "steelblue"}
+            },
+            "update": {
+              "y": {"scale": "genescale", "field": "transcript", "offset": 7},
+              "height": {"value": 10},
+              "x": {"scale": "xscale", "field": "split_exon_start"},
+              "x2": {"scale": "xscale", "field": "split_exon_end"},
+              "fill": {"value": "steelblue"}
             }
           }
         },
@@ -134,6 +283,13 @@
           "from": {"data": "gene_subset"},
           "encode": {
             "enter":{
+              "y": {"scale": "genescale", "field": "transcript", "offset": 8},
+              "x": {"scale": "xscale", "field": "bpstart"},
+              "fill": {"value": "#000"},
+              "text": {"field": "gene"},
+              "fontSize": {"value": 10}
+            },
+            "update": {
               "y": {"scale": "genescale", "field": "transcript", "offset": 8},
               "x": {"scale": "xscale", "field": "bpstart"},
               "fill": {"value": "#000"},

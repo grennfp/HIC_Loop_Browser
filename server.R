@@ -23,9 +23,21 @@ shinyServer(function(input, output, session) {
     
     #the genes/transcripts in the bp range we selected
     range_marker_data <-NULL
-    #the loops we will show in the plot
-    range_loop_data <-NULL
-    sel_samples_only_data <- NULL
+    
+    #### Loop Dataframes
+    #all loops for group1 samples
+    group1_loops <- NULL
+    #all loops with both anchors in range for group1 samples
+    group1_loops_full_inrange <- NULL
+    #all loops with at least one anchor in range for group1 samples
+    group1_loops_any_inrange <- NULL
+    #all loops for group2 samples
+    group2_loops <- NULL
+    #all loops with both anchors in range for group2 samples
+    group2_loops_full_inrange <- NULL
+    #all loops with at least one anchor in range for group2 samples
+    group2_loops_any_inrange <- NULL
+
     
     #the markers we want to show in the plot
     custom_marker_data <- NULL
@@ -40,7 +52,7 @@ shinyServer(function(input, output, session) {
     #changing the fileselect dropdown
     observeEvent(input$fileSelect,
                  {
-
+                     
                      
                      loaded_bedpe_name <<- input$fileSelect
                      loaded_bedpe <<- fread(paste0(bedpe_dir,"/",input$fileSelect))
@@ -72,15 +84,28 @@ shinyServer(function(input, output, session) {
                  }
     )
     
+    observeEvent(input$arcWidthRadio,{
+        if(input$arcWidthRadio == "count")
+        {
+            output$arcWidthText <- renderText("Arc width will be the number of samples with the loop. The more samples with the exact same loop, the larger the arc width.")
+        }
+        if(input$arcWidthRadio == "region")
+        {
+            output$arcWidthText <- renderText("Arc width will cover the anchor region. So 1000-2000:4000-5000 will have an arc width that will cover the 1000bp region of both anchors.")
+        }
+        if(input$arcWidthRadio == "set")
+        {
+            output$arcWidthText <- renderText("Arc width will be the same for all loops.")
+        }
+    })
+    
     
     observeEvent(input$sampleRadio,{
         if(input$sampleRadio == "All Samples")
         {
             updateCheckboxGroupInput(session,label = "Samples to Include:", inputId="sampleSelect", choices = sort(samples), selected=samples)
             hide("sampleSelect2")
-            #disable("sampleSelect2")
             hide("sampleSelect")
-            #disable("sampleSelect")
         }
         if(input$sampleRadio == "Custom")
         {
@@ -124,24 +149,26 @@ shinyServer(function(input, output, session) {
         input$sampleSelect2
     },
     {
-
+        
         start <- as.numeric(input$startInput)
         end <- as.numeric(input$endInput)
-
-        #filter data by the selected samples
-        sel_samples_only_data <<- loaded_bedpe[loaded_bedpe$sample_name %in% input$sampleSelect]
         
+        #filter data by the selected samples
+        group1_loops <<- loaded_bedpe[loaded_bedpe$sample_name %in% input$sampleSelect]
+        
+        #get all loops in the range. this includes loops with only one anchor in the range
+        group1_loops_any_inrange <<- group1_loops[which(((group1_loops$x1>=start & group1_loops$x1<=end) & (group1_loops$x2>=start & group1_loops$x2<=end)) | ((group1_loops$y1>=start & group1_loops$y1<=end) &(group1_loops$y2>=start & group1_loops$y2<=end)))]
         #then filter for loops whose x1, x2, y1, and y2 are all within the range
-        range_loop_data <<- sel_samples_only_data[which((sel_samples_only_data$x1>=start & sel_samples_only_data$x1<=end) & (sel_samples_only_data$x2>=start & sel_samples_only_data$x2<=end) &(sel_samples_only_data$y1>=start & sel_samples_only_data$y1<=end) &(sel_samples_only_data$y2>=start & sel_samples_only_data$y2<=end))]
-
+        group1_loops_full_inrange <<- group1_loops[which((group1_loops$x1>=start & group1_loops$x1<=end) & (group1_loops$x2>=start & group1_loops$x2<=end) &(group1_loops$y1>=start & group1_loops$y1<=end) &(group1_loops$y2>=start & group1_loops$y2<=end))]
+        
         #get loops that only have the left anchor in range
-        only_x_in_range <- sel_samples_only_data[which((sel_samples_only_data$x1>=start & sel_samples_only_data$x1<=end) & (sel_samples_only_data$x2>=start & sel_samples_only_data$x2<=end) & ((sel_samples_only_data$y1<start | sel_samples_only_data$y1>end) |(sel_samples_only_data$y2<start | sel_samples_only_data$y2>end)))]
+        only_x_in_range <- group1_loops[which((group1_loops$x1>=start & group1_loops$x1<=end) & (group1_loops$x2>=start & group1_loops$x2<=end) & ((group1_loops$y1<start | group1_loops$y1>end) |(group1_loops$y2<start | group1_loops$y2>end)))]
         #get loops that only have the right anchor in range
-        only_y_in_range <- sel_samples_only_data[which((sel_samples_only_data$y1>=start & sel_samples_only_data$y1<=end) & (sel_samples_only_data$y2>=start & sel_samples_only_data$y2<=end) & ((sel_samples_only_data$x1<start | sel_samples_only_data$x1>end) |(sel_samples_only_data$x2<start | sel_samples_only_data$x2>end)))]
-
+        only_y_in_range <- group1_loops[which((group1_loops$y1>=start & group1_loops$y1<=end) & (group1_loops$y2>=start & group1_loops$y2<=end) & ((group1_loops$x1<start | group1_loops$x1>end) |(group1_loops$x2<start | group1_loops$x2>end)))]
+        
         #get the genes/transcripts in the range
         range_marker_data <<- gene_data[which(gene_data$chr == chrm & as.numeric(gene_data$bpstart)>=start & as.numeric(gene_data$bpend) <= end),]
-
+        
         list_unique_genes_in_range <- unique(range_marker_data$gene)
         list_unique_transcripts_in_range <- unique(range_marker_data$transcript)
         
@@ -151,7 +178,7 @@ shinyServer(function(input, output, session) {
             output$rangeTable <- DT::renderDataTable(
                 {
                     
-                    range_df <- data.frame("Loops Completely in Range"=nrow(range_loop_data), "Loops with only left anchor in range (won't be in plot)"=nrow(only_x_in_range),"Loops with only right anchor in range (won't be in plot)"=nrow(only_y_in_range)
+                    range_df <- data.frame("Loops Completely in Range"=nrow(group1_loops_full_inrange), "Loops with only left anchor in range"=nrow(only_x_in_range),"Loops with only right anchor in range"=nrow(only_y_in_range)
                                            ,"Unique Genes in Range"=length(list_unique_genes_in_range),"Unique Transcripts in Range"=length(list_unique_transcripts_in_range),check.names=F)
                     
                     t(range_df)
@@ -166,32 +193,34 @@ shinyServer(function(input, output, session) {
             
             start <- as.numeric(input$startInput)
             end <- as.numeric(input$endInput)
-
-            #filter data by the second group's samples
-            sel_samples_only_data2 <- loaded_bedpe[loaded_bedpe$sample_name %in% input$sampleSelect2]
             
-            #filter second group loops for loops whose x1, x2, y1, and y2 are all within the range
-            range_loop_data2 <- sel_samples_only_data2[which((sel_samples_only_data2$x1>=start & sel_samples_only_data2$x1<=end) & (sel_samples_only_data2$x2>=start & sel_samples_only_data2$x2<=end) &(sel_samples_only_data2$y1>=start & sel_samples_only_data2$y1<=end) &(sel_samples_only_data2$y2>=start & sel_samples_only_data2$y2<=end))]
-
-            #get loops of second group that only have left anchor in range
-            only_x_in_range2 <- sel_samples_only_data2[which((sel_samples_only_data2$x1>=start & sel_samples_only_data2$x1<=end) & (sel_samples_only_data2$x2>=start & sel_samples_only_data2$x2<=end) & ((sel_samples_only_data2$y1<start | sel_samples_only_data2$y1>end) |(sel_samples_only_data2$y2<start | sel_samples_only_data2$y2>end)))]
-            #get loops of second group that only have right anchor in range
-            only_y_in_range2 <- sel_samples_only_data2[which((sel_samples_only_data2$y1>=start & sel_samples_only_data2$y1<=end) & (sel_samples_only_data2$y2>=start & sel_samples_only_data2$y2<=end) & ((sel_samples_only_data2$x1<start | sel_samples_only_data2$x1>end) |(sel_samples_only_data2$x2<start | sel_samples_only_data2$x2>end)))]
+            #filter data by the selected samples
+            group2_loops <<- loaded_bedpe[loaded_bedpe$sample_name %in% input$sampleSelect2]
+            
+            #get all loops in the range. this includes loops with only one anchor in the range
+            group2_loops_any_inrange <<- group2_loops[which(((group2_loops$x1>=start & group2_loops$x1<=end) & (group2_loops$x2>=start & group2_loops$x2<=end)) | ((group2_loops$y1>=start & group2_loops$y1<=end) &(group2_loops$y2>=start & group2_loops$y2<=end)))]
+            #then filter for loops whose x1, x2, y1, and y2 are all within the range
+            group2_loops_full_inrange <<- group2_loops[which((group2_loops$x1>=start & group2_loops$x1<=end) & (group2_loops$x2>=start & group2_loops$x2<=end) &(group2_loops$y1>=start & group2_loops$y1<=end) &(group2_loops$y2>=start & group2_loops$y2<=end))]
+            
+            #get loops that only have the left anchor in range
+            only_x_in_range2 <- group2_loops[which((group2_loops$x1>=start & group2_loops$x1<=end) & (group2_loops$x2>=start & group2_loops$x2<=end) & ((group2_loops$y1<start | group2_loops$y1>end) |(group2_loops$y2<start | group2_loops$y2>end)))]
+            #get loops that only have the right anchor in range
+            only_y_in_range2 <- group2_loops[which((group2_loops$y1>=start & group2_loops$y1<=end) & (group2_loops$y2>=start & group2_loops$y2<=end) & ((group2_loops$x1<start | group2_loops$x1>end) |(group2_loops$x2<start | group2_loops$x2>end)))]
             
             
             output$rangeTable <- DT::renderDataTable(
                 {
                     
-                    range_df <- data.table("Loops Completely in Range"=c(nrow(range_loop_data),nrow(range_loop_data2)), "Loops with only left anchor in range (won't be in plot)"=c(nrow(only_x_in_range),nrow(only_x_in_range2)),"Loops with only right anchor in range (won't be in plot)"=c(nrow(only_y_in_range),nrow(only_y_in_range2))
+                    range_df <- data.table("Loops Completely in Range"=c(nrow(group1_loops_full_inrange),nrow(group2_loops_full_inrange)), "Loops with only left anchor in range"=c(nrow(only_x_in_range),nrow(only_x_in_range2)),"Loops with only right anchor in range"=c(nrow(only_y_in_range),nrow(only_y_in_range2))
                                            ,"Unique Genes in Range"=c(length(list_unique_genes_in_range),length(list_unique_genes_in_range)),"Unique Transcripts in Range"=c(length(list_unique_transcripts_in_range),length(list_unique_transcripts_in_range)),check.names=F)
-
+                    
                     t(range_df)
                     
                 },
                 colnames = c("Group 1", "Group 2"), escape = F, options = list(searching =F, paginate = F, ordering = F, dom = 't')
             )
         }
-
+        
     })
     
     #changing the marker radio buttons or the range textboxes
@@ -200,108 +229,88 @@ shinyServer(function(input, output, session) {
         input$gtRadio
         input$startInput
         input$endInput
-        },
-                 {
-                     marker <- ""
-                     if(input$gtRadio=="Genes")
-                     {
-                         marker <- "genes"
-                         custom_marker_data <<- range_marker_data[!duplicated(range_marker_data[,c('gene')])]
-                     }
-                     if(input$gtRadio=="Transcripts")
-                     {
-                         marker <- "transcripts"
-                         custom_marker_data <<- range_marker_data[!duplicated(range_marker_data[,c('transcript')])]
-                     }
-                     if(input$gtTypeRadio=="All")
-                     {
-                         #put this here again to catch changes to both radio button cols... i think
-                         if(input$gtRadio=="Genes")
-                         {
-                             custom_marker_data <<- range_marker_data[!duplicated(range_marker_data[,c('gene')])]
-                         }
-                         if(input$gtRadio=="Transcripts")
-                         {
-                             custom_marker_data <<- range_marker_data[!duplicated(range_marker_data[,c('transcript')])]
-                         }
-                         output$numGeneOutput <- renderText(paste0("plot will include ", nrow(custom_marker_data), " ", marker))
-                         hide("markerSelect")
-                         hide("checkall")
-                         hide("uncheckall")
-                     }
-                     if(input$gtTypeRadio=="None")
-                     {
-                         custom_marker_data<<- data.frame()
-                         output$numGeneOutput <-renderText(paste0("plot will include 0 ", marker))
-                         hide("markerSelect")
-                         hide("checkall")
-                         hide("uncheckall")
-                     }
-                     if(input$gtTypeRadio=="Custom")
-                     {
-
-
-                         
-                         if(input$gtRadio=="Genes")
-                         {
-                             marker_list <<- sort(custom_marker_data$gene)
-                         }
-                         if(input$gtRadio=="Transcripts")
-                         {
-                             marker_list <<- sort(custom_marker_data$transcript)
-                         }
-
-                         
-
-                         if(length(marker_list)<=limit)
-                         {
-                             show("markerSelect")
-                             show("checkall")
-                             show("uncheckall")
-                             updateCheckboxGroupInput(session, inputId="markerSelect", choices = marker_list, selected=marker_list)
-                             output$numGeneOutput <-renderText(paste0("plot will include ", nrow(custom_marker_data), " ", marker))
-                         }
-                         else
-                         {
-                             hide("markerSelect")
-                             hide("checkall")
-                             hide("uncheckall")
-                             output$numGeneOutput <-renderText(paste0(length(marker_list) ," is too many ", marker, " for custom selection. Please reduce to ", limit, " or less!"))
-                         }
-
-                         
-                         
-                     }
-                 })
+    },
+    {
+        marker <- ""
+        if(input$gtRadio=="Genes")
+        {
+            marker <- "genes"
+            custom_marker_data <<- range_marker_data[!duplicated(range_marker_data[,c('gene')])]
+        }
+        if(input$gtRadio=="Transcripts")
+        {
+            marker <- "transcripts"
+            custom_marker_data <<- range_marker_data[!duplicated(range_marker_data[,c('transcript')])]
+        }
+        if(input$gtTypeRadio=="All")
+        {
+            #put this here again to catch changes to both radio button cols... i think
+            if(input$gtRadio=="Genes")
+            {
+                custom_marker_data <<- range_marker_data[!duplicated(range_marker_data[,c('gene')])]
+            }
+            if(input$gtRadio=="Transcripts")
+            {
+                custom_marker_data <<- range_marker_data[!duplicated(range_marker_data[,c('transcript')])]
+            }
+            output$numGeneOutput <- renderText(paste0("plot will include ", nrow(custom_marker_data), " ", marker))
+            hide("markerSelect")
+            hide("checkall")
+            hide("uncheckall")
+        }
+        if(input$gtTypeRadio=="None")
+        {
+            custom_marker_data<<- data.frame()
+            output$numGeneOutput <-renderText(paste0("plot will include 0 ", marker))
+            hide("markerSelect")
+            hide("checkall")
+            hide("uncheckall")
+        }
+        if(input$gtTypeRadio=="Custom")
+        {
+            
+            
+            
+            if(input$gtRadio=="Genes")
+            {
+                marker_list <<- sort(custom_marker_data$gene)
+            }
+            if(input$gtRadio=="Transcripts")
+            {
+                marker_list <<- sort(custom_marker_data$transcript)
+            }
+            
+            
+            
+            if(length(marker_list)<=limit)
+            {
+                show("markerSelect")
+                show("checkall")
+                show("uncheckall")
+                updateCheckboxGroupInput(session, inputId="markerSelect", choices = marker_list, selected=marker_list)
+                output$numGeneOutput <-renderText(paste0("plot will include ", nrow(custom_marker_data), " ", marker))
+            }
+            else
+            {
+                hide("markerSelect")
+                hide("checkall")
+                hide("uncheckall")
+                output$numGeneOutput <-renderText(paste0(length(marker_list) ," is too many ", marker, " for custom selection. Please reduce to ", limit, " or less!"))
+            }
+            
+            
+            
+        }
+    })
     #hit the checkall button
     observeEvent(input$checkall,
                  {
                      updateCheckboxGroupInput(session, inputId="markerSelect", choices = marker_list, selected=marker_list)
-                     if(input$gtRadio=="Genes")
-                     {
-                         #custom_marker_data <<- range_marker_data[!duplicated(range_marker_data[,c('gene')])]
-                         #output$numGeneOutput <-renderText(paste0("plot will include ", nrow(custom_marker_data), " genes"))
-                     }
-                     if(input$gtRadio=="Transcripts")
-                     {
-                         #custom_marker_data <<- range_marker_data[!duplicated(range_marker_data[,c('transcript')])]
-                         #output$numGeneOutput <-renderText(paste0("plot will include ", nrow(custom_marker_data), " transcripts"))
-                     }
                  })
     #hit the uncheck all button
     observeEvent(input$uncheckall,
                  {
                      updateCheckboxGroupInput(session, inputId="markerSelect", choices = marker_list, selected=NULL)
-                     if(input$gtRadio=="Genes")
-                     {
-                         #custom_marker_data <<- data.frame()
-                         #output$numGeneOutput <-renderText(paste0("plot will include ", nrow(custom_marker_data), " genes"))
-                     }
-                     if(input$gtRadio=="Transcripts")
-                     {
-                         #custom_marker_data <<- data.frame()
-                         #output$numGeneOutput <-renderText(paste0("plot will include ", nrow(custom_marker_data), " transcripts"))
-                     }
                  })
     #check one of the custom marker checkboxes
     observeEvent(ignoreNULL=F,{input$markerSelect},
@@ -350,16 +359,16 @@ shinyServer(function(input, output, session) {
                                  custom_marker_data <<- data.frame()
                                  output$numGeneOutput <-renderText(paste0("plot will include 0 transcripts"))
                              }
-
+                             
                          }
                      }
-
+                     
                  })
     #hit the plot button
     observeEvent(input$plotButton,
                  {
                      vega_json <- rjson::fromJSON(file="www/arc_schema.json")
-
+                     
                      
                      count_range_loop_data <- NULL
                      #if using all samples or a custom list (not grouping samples) then group by position, add counts, add sample name string, and add loop color
@@ -367,7 +376,7 @@ shinyServer(function(input, output, session) {
                      {
                          
                          #count_range_loop_data <- range_loop_data %>% group_by(chr1,x1,x2,chr2,y1,y2) %>% mutate(test_count = n())
-                         count_range_loop_data <- sel_samples_only_data %>% group_by(chr1,x1,x2,chr2,y1,y2) %>% mutate(test_count = n())
+                         count_range_loop_data <- group1_loops_any_inrange %>% group_by(chr1,x1,x2,chr2,y1,y2) %>% mutate(test_count = n())#sel_samples_only_data %>% group_by(chr1,x1,x2,chr2,y1,y2) %>% mutate(test_count = n())
                          count_range_loop_data <- count_range_loop_data %>% group_by(chr1,x1,x2,chr2,y1,y2,test_count) %>% mutate(sample_name = paste0(sample_name, collapse="\n,")) %>% mutate(color = input$colorSelect1)
                          #setup json to read color values
                          vega_json[["marks"]][[5]][["encode"]][["update"]][["stroke"]][["field"]] <- "datum.color"
@@ -376,19 +385,13 @@ shinyServer(function(input, output, session) {
                      #else if grouping samples, do the same as above, but assign group to each loop, and then assign colors based on the groups
                      else
                      {
-                         start <- as.numeric(input$startInput)
-                         end <- as.numeric(input$endInput)
-                         sel_samples_only_data2 <- loaded_bedpe[loaded_bedpe$sample_name %in% input$sampleSelect2]
-                         range_loop_data2 <- sel_samples_only_data2[which((sel_samples_only_data2$x1>=start & sel_samples_only_data2$x1<=end) & (sel_samples_only_data2$x2>=start & sel_samples_only_data2$x2<=end) &(sel_samples_only_data2$y1>=start & sel_samples_only_data2$y1<=end) &(sel_samples_only_data2$y2>=start & sel_samples_only_data2$y2<=end))]
-                         
                          #assign group number
-                         #group1 <- range_loop_data
-                         group1 <- sel_samples_only_data
+                         group1 <- group1_loops_any_inrange
                          group1$group <- 1
                          
-                         #group2 <- range_loop_data2
-                         group2 <- sel_samples_only_data2
+                         group2 <- group2_loops_any_inrange
                          group2$group <- 2
+                         
                          #combine group1 and group2, group them by position, combine all the group numbers into one string
                          all_group_data <- rbind(group1,group2) %>% group_by(chr1,x1,x2,chr2,y1,y2) %>% mutate(groups = paste0(group, collapse=";")) 
                          #check the group number string and apply a color.
@@ -401,17 +404,16 @@ shinyServer(function(input, output, session) {
                          vega_json[["marks"]][[5]][["encode"]][["update"]][["stroke"]][["field"]] <- "datum.color"
                          vega_json[["marks"]][[5]][["encode"]][["hover"]][["stroke"]][["field"]] <- "datum.color"
                      }
-
-
+                     
+                     
                      count_range_loop_data <- unique(count_range_loop_data)
                      
-                     vega_json[["signals"]][[1]][["value"]] <- info_df$"Min Loop Position:"#input$startInput#min
+                     vega_json[["signals"]][[1]][["value"]] <- as.numeric(input$startInput)
                      
-                     vega_json[["signals"]][[2]][["value"]] <- info_df$"Max Loop Position:"#input$endInput#max
+                     vega_json[["signals"]][[2]][["value"]] <- as.numeric(input$endInput)
                      
-                     vega_json[["scales"]][[2]][["domain"]][[1]] <- input$startInput
-                     vega_json[["scales"]][[2]][["domain"]][[2]] <- input$endInput
-                     
+
+                     vega_json[["padding"]][["top"]] <- input$loopHeightInput
                      vega_json[["width"]] <- as.numeric(input$widthInput)
                      vega_json[["height"]] <- as.numeric(input$heightInput)
                      vega_json[["data"]][[2]][["values"]] <- create_list_for_json(custom_marker_data)
@@ -445,19 +447,32 @@ shinyServer(function(input, output, session) {
                      {
                          vega_json[["marks"]][[5]][["encode"]][["hover"]][["tooltip"]][["signal"]] <- "datum.bpx1 + '-' + datum.bpx2 + ':' + datum.bpy1 +'-' + datum.bpy2"
                      }
-
+                     
+                     #which arc width setting to use
+                     if(input$arcWidthRadio == "count")
+                     {
+                         vega_json[["marks"]][[4]][["transform"]][[3]][["expr"]] <- "(datum.disp_count)*2"
+                     }
+                     if(input$arcWidthRadio == "region")
+                     {
+                         vega_json[["marks"]][[4]][["transform"]][[3]][["expr"]] <- "(datum.scalex2-datum.scalex1)"
+                     }
+                     if(input$arcWidthRadio == "set")
+                     {
+                         vega_json[["marks"]][[4]][["transform"]][[3]][["expr"]] <- "2"
+                     }
+                     
                      jsonstring <- rjson::toJSON(vega_json)
-                     #write(jsonstring, "www/testtoJSON.json")
                      vega <- as_vegaspec(jsonstring)
                      
                      output$vegatest <- renderVegawidget(
                          {
-
+                             
                              vega
                              
                          })
                  })
-
+    
     #function to create a list from a data frame formatted the way we want it for the vega json
     create_list_for_json <- function(data)
     {
@@ -473,7 +488,7 @@ shinyServer(function(input, output, session) {
         }
         final_list
     }
-
-
-
+    
+    
+    
 })
