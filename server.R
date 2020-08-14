@@ -11,7 +11,8 @@ shinyServer(function(input, output, session) {
     #directory containing the per chromosome bedpes for vega
     bedpe_dir <-"www/vega_bedpes"
     #make a list of the files for the drop down
-    files <- list.files(bedpe_dir)
+    file_list <- list.files(bedpe_dir)
+    files <- file_list[grepl("*hic.bedpe",file_list)]
     updateSelectInput(session, "fileSelect", choices = files, selected=files[1])
     
     #the loaded bedpe file dataframe
@@ -44,8 +45,6 @@ shinyServer(function(input, output, session) {
     
     #the list of markers (genes/transcripts) to show in the group checkbox
     marker_list <- NULL
-    #limit for the number of gene/transcript checkboxes to show
-    limit <- 100
     #current chromosome we are looking at
     chrm <- NULL
     
@@ -79,7 +78,7 @@ shinyServer(function(input, output, session) {
                          },
                          colnames = "", escape = F, options = list(searching =F, paginate = F, ordering = F, dom = 't')
                      )
-                     
+
                      
                  }
     )
@@ -171,6 +170,7 @@ shinyServer(function(input, output, session) {
         
         list_unique_genes_in_range <- unique(range_marker_data$gene)
         list_unique_transcripts_in_range <- unique(range_marker_data$transcript)
+
         
         #if using all samples or a custom list (not two groups of samples)
         if(input$sampleRadio!="Group Samples")
@@ -207,7 +207,6 @@ shinyServer(function(input, output, session) {
             #get loops that only have the right anchor in range
             only_y_in_range2 <- group2_loops[which((group2_loops$y1>=start & group2_loops$y1<=end) & (group2_loops$y2>=start & group2_loops$y2<=end) & ((group2_loops$x1<start | group2_loops$x1>end) |(group2_loops$x2<start | group2_loops$x2>end)))]
             
-            
             output$rangeTable <- DT::renderDataTable(
                 {
                     
@@ -232,164 +231,79 @@ shinyServer(function(input, output, session) {
     },
     {
         marker <- ""
+        chr_markers <- gene_data[which(gene_data$chr == chrm),]
         if(input$gtRadio=="Genes")
         {
             marker <- "genes"
-            custom_marker_data <<- range_marker_data[!duplicated(range_marker_data[,c('gene')])]
+            custom_marker_data <<- chr_markers[!duplicated(chr_markers[,c('gene')])]
         }
         if(input$gtRadio=="Transcripts")
         {
             marker <- "transcripts"
-            custom_marker_data <<- range_marker_data[!duplicated(range_marker_data[,c('transcript')])]
+            custom_marker_data <<- chr_markers[!duplicated(chr_markers[,c('transcript')])]
         }
         if(input$gtTypeRadio=="All")
         {
             #put this here again to catch changes to both radio button cols... i think
             if(input$gtRadio=="Genes")
             {
-                custom_marker_data <<- range_marker_data[!duplicated(range_marker_data[,c('gene')])]
+                custom_marker_data <<- chr_markers[!duplicated(chr_markers[,c('gene')])]
             }
             if(input$gtRadio=="Transcripts")
             {
-                custom_marker_data <<- range_marker_data[!duplicated(range_marker_data[,c('transcript')])]
+                custom_marker_data <<- chr_markers[!duplicated(chr_markers[,c('transcript')])]
             }
-            output$numGeneOutput <- renderText(paste0("plot will include ", nrow(custom_marker_data), " ", marker))
-            hide("markerSelect")
-            hide("checkall")
-            hide("uncheckall")
         }
         if(input$gtTypeRadio=="None")
         {
             custom_marker_data<<- data.frame()
-            output$numGeneOutput <-renderText(paste0("plot will include 0 ", marker))
-            hide("markerSelect")
-            hide("checkall")
-            hide("uncheckall")
-        }
-        if(input$gtTypeRadio=="Custom")
-        {
-            
-            
-            
-            if(input$gtRadio=="Genes")
-            {
-                marker_list <<- sort(custom_marker_data$gene)
-            }
-            if(input$gtRadio=="Transcripts")
-            {
-                marker_list <<- sort(custom_marker_data$transcript)
-            }
-            
-            
-            
-            if(length(marker_list)<=limit)
-            {
-                show("markerSelect")
-                show("checkall")
-                show("uncheckall")
-                updateCheckboxGroupInput(session, inputId="markerSelect", choices = marker_list, selected=marker_list)
-                output$numGeneOutput <-renderText(paste0("plot will include ", nrow(custom_marker_data), " ", marker))
-            }
-            else
-            {
-                hide("markerSelect")
-                hide("checkall")
-                hide("uncheckall")
-                output$numGeneOutput <-renderText(paste0(length(marker_list) ," is too many ", marker, " for custom selection. Please reduce to ", limit, " or less!"))
-            }
-            
-            
-            
         }
     })
-    #hit the checkall button
-    observeEvent(input$checkall,
-                 {
-                     updateCheckboxGroupInput(session, inputId="markerSelect", choices = marker_list, selected=marker_list)
-                 })
-    #hit the uncheck all button
-    observeEvent(input$uncheckall,
-                 {
-                     updateCheckboxGroupInput(session, inputId="markerSelect", choices = marker_list, selected=NULL)
-                 })
-    #check one of the custom marker checkboxes
-    observeEvent(ignoreNULL=F,{input$markerSelect},
-                 {
-                     if(input$gtTypeRadio=="Custom")
-                     {
-                         if(input$gtRadio=="Genes")
-                         {
-                             if(!is.null(input$markerSelect))
-                             {
-                                 selected_markers <- range_marker_data[which(range_marker_data$gene %in% input$markerSelect),]
-                                 custom_marker_data <<- selected_markers[!duplicated(selected_markers[,c('gene')])]
-                                 if(nrow(custom_marker_data <= limit))
-                                 {
-                                     output$numGeneOutput <-renderText(paste0("plot will include ", nrow(custom_marker_data), " genes"))
-                                 }
-                                 else
-                                 {
-                                     output$numGeneOutput <-renderText(paste0(length(marker_list) ," is too many ", "genes", " for custom selection. Please reduce to ", limit, " or less!"))
-                                 }
-                             }
-                             else
-                             {
-                                 custom_marker_data <<- data.frame()
-                                 output$numGeneOutput <-renderText(paste0("plot will include 0 genes"))
-                             }
-                             
-                         }
-                         if(input$gtRadio=="Transcripts")
-                         {
-                             if(!is.null(input$markerSelect))
-                             {
-                                 selected_markers <- range_marker_data[which(range_marker_data$transcript %in% input$markerSelect),]
-                                 custom_marker_data <<- selected_markers[!duplicated(selected_markers[,c('transcript')])]
-                                 if(nrow(custom_marker_data <= limit))
-                                 {
-                                     output$numGeneOutput <-renderText(paste0("plot will include ", nrow(custom_marker_data), " transcripts"))
-                                 }
-                                 else
-                                 {
-                                     output$numGeneOutput <-renderText(paste0(length(marker_list) ," is too many ", "transcripts", " for custom selection. Please reduce to ", limit, " or less!"))
-                                 }
-                             }
-                             else
-                             {
-                                 custom_marker_data <<- data.frame()
-                                 output$numGeneOutput <-renderText(paste0("plot will include 0 transcripts"))
-                             }
-                             
-                         }
-                     }
-                     
-                 })
+
     #hit the plot button
     observeEvent(input$plotButton,
                  {
                      vega_json <- rjson::fromJSON(file="www/arc_schema.json")
                      
                      
-                     count_range_loop_data <- NULL
+                     vega_loop_data <- NULL
                      #if using all samples or a custom list (not grouping samples) then group by position, add counts, add sample name string, and add loop color
                      if(input$sampleRadio!="Group Samples")
                      {
                          
-                         #count_range_loop_data <- range_loop_data %>% group_by(chr1,x1,x2,chr2,y1,y2) %>% mutate(test_count = n())
-                         count_range_loop_data <- group1_loops_any_inrange %>% group_by(chr1,x1,x2,chr2,y1,y2) %>% mutate(test_count = n())#sel_samples_only_data %>% group_by(chr1,x1,x2,chr2,y1,y2) %>% mutate(test_count = n())
-                         count_range_loop_data <- count_range_loop_data %>% group_by(chr1,x1,x2,chr2,y1,y2,test_count) %>% mutate(sample_name = paste0(sample_name, collapse="\n,")) %>% mutate(color = input$colorSelect1)
+                         vega_loop_data <- group1_loops %>% group_by(chr1,x1,x2,chr2,y1,y2) %>% mutate(test_count = n())#sel_samples_only_data %>% group_by(chr1,x1,x2,chr2,y1,y2) %>% mutate(test_count = n())
+                         vega_loop_data <- vega_loop_data %>% group_by(chr1,x1,x2,chr2,y1,y2,test_count) %>% mutate(sample_name = paste0(sample_name, collapse="\n,")) %>% mutate(color = input$colorSelect1)
                          #setup json to read color values
                          vega_json[["marks"]][[5]][["encode"]][["update"]][["stroke"]][["field"]] <- "datum.color"
                          vega_json[["marks"]][[5]][["encode"]][["hover"]][["stroke"]][["field"]] <- "datum.color"
+
+                         #if only one sample selected then need to make sure it gets passed as a list to correctly convert the data into json format later
+                         if(length(input$sampleSelect)==1)
+                         {
+                             vega_json[["signals"]][[3]][["value"]] <- list(input$sampleSelect)
+                         }
+                         #if no samples were selected then enter a temp sample name so that the regex operation used to filter out sample works in vega
+                         else if(length(input$sampleSelect)==0)
+                         {
+                             vega_json[["signals"]][[3]][["value"]] <- list("null")
+                         }
+                         #otherwise if there was more than one sample selected then pass the vector as usual
+                         else
+                         {
+                             vega_json[["signals"]][[3]][["value"]] <- input$sampleSelect
+                         }
+                         #we are only converned with group1 samples, so set the group2 samples to "null" in vega
+                         vega_json[["signals"]][[4]][["value"]] <- list("null")
+
                      }
                      #else if grouping samples, do the same as above, but assign group to each loop, and then assign colors based on the groups
                      else
                      {
                          #assign group number
-                         group1 <- group1_loops_any_inrange
+                         group1 <- group1_loops
                          group1$group <- 1
                          
-                         group2 <- group2_loops_any_inrange
+                         group2 <- group2_loops
                          group2$group <- 2
                          
                          #combine group1 and group2, group them by position, combine all the group numbers into one string
@@ -399,25 +313,85 @@ shinyServer(function(input, output, session) {
                          #get distinct loops and add count
                          distinct_counted_data <- color_group_data %>% distinct_at(.vars=c('chr1','x1','x2','chr2','y1','y2','sample_name'),.keep_all=TRUE)  %>% mutate(test_count = n())
                          #add sample name string and select relevant values
-                         count_range_loop_data <- distinct_counted_data %>% group_by(chr1,x1,x2,chr2,y1,y2,test_count)  %>% mutate(sample_name = paste0(sample_name, collapse="\n,")) %>% select(chr1,x1,x2,chr2,y1,y2,test_count,sample_name,color)
+                         vega_loop_data <- distinct_counted_data %>% group_by(chr1,x1,x2,chr2,y1,y2,test_count)  %>% mutate(sample_name = paste0(sample_name, collapse="\n,")) %>% select(chr1,x1,x2,chr2,y1,y2,test_count,sample_name,color)
                          #setup json to read color values
                          vega_json[["marks"]][[5]][["encode"]][["update"]][["stroke"]][["field"]] <- "datum.color"
                          vega_json[["marks"]][[5]][["encode"]][["hover"]][["stroke"]][["field"]] <- "datum.color"
+
+                         #if only one sample selected then need to make sure it gets passed as a list to correctly convert the data into json format later
+                         if(length(input$sampleSelect)==1)
+                         {
+                             vega_json[["signals"]][[3]][["value"]] <- list(input$sampleSelect)
+                         }
+                         #if no samples were selected then enter a temp sample name so that the regex operation used to filter out sample works in vega
+                         else if(length(input$sampleSelect)==0)
+                         {
+                             vega_json[["signals"]][[3]][["value"]] <- list("null")
+                         }
+                         #otherwise if there was more than one sample selected then pass the vector as usual
+                         else
+                         {
+                             vega_json[["signals"]][[3]][["value"]] <- input$sampleSelect
+                         }
+                         #if only one sample selected then need to make sure it gets passed as a list to correctly convert the data into json format later
+                         if(length(input$sampleSelect2)==1)
+                         {
+                             vega_json[["signals"]][[4]][["value"]] <- list(input$sampleSelect2)
+                         }
+                         #if no samples were selected then enter a temp sample name so that the regex operation used to filter out sample works in vega
+                         else if(length(input$sampleSelect2)==0)
+                         {
+                             vega_json[["signals"]][[4]][["value"]] <- list("null")
+                         }
+                         #otherwise if there was more than one sample selected then pass the vector as usual
+                         else
+                         {
+                             vega_json[["signals"]][[4]][["value"]] <- input$sampleSelect2
+                         }
+
                      }
                      
+
+                     #provide the url to the correct chromosome atacseq json file if including atacseq data
+                     if(input$atacRadio=="All")
+                     {
+                         #set url to atacseq json
+                         vega_json[["data"]][[3]][["url"]] <- paste0("atac_jsons/",gsub("chr","",chrm),"_all_samples_atacseq.json")
+                         #add vega expression to assign colors to atacseq data
+                         vega_json[["data"]][[3]][["transform"]][[4]][["expr"]] <- paste0("if(test(regexp(join(group1_samples,'|')),datum.sample_name),'",input$colorSelect1,"','",input$colorSelect2,"')")
+                         #move down the gene display if including atacseq data
+                         vega_json[["scales"]][[1]][["range"]][[1]] <- 160
+                         vega_json[["signals"]][[5]][["value"]] <- 160#as.numeric(input$heightInput) + 160
+                     }
+                     else
+                     {
+                         vega_json[["data"]][[3]][["url"]] <- ""
+                         #move up the gene display if including atacseq data
+                         vega_json[["scales"]][[1]][["range"]][[1]] <- 50
+                         vega_json[["signals"]][[5]][["value"]] <- 50#as.numeric(input$heightInput) + 50
+                     }
                      
-                     count_range_loop_data <- unique(count_range_loop_data)
+
                      
-                     vega_json[["signals"]][[1]][["value"]] <- as.numeric(input$startInput)
+                     vega_loop_data <- unique(vega_loop_data)
                      
-                     vega_json[["signals"]][[2]][["value"]] <- as.numeric(input$endInput)
+                     #set the signals for the full chromosome bp range
+                     vega_json[["signals"]][[1]][["value"]] <- info_df$"Min Loop Position:"
                      
+                     vega_json[["signals"]][[2]][["value"]] <- info_df$"Max Loop Position:"
+                     
+                     #set the signals for the desired start bp range
+                     vega_json[["signals"]][[6]][["value"]] <- as.numeric(input$startInput)
+                     
+                     vega_json[["signals"]][[7]][["value"]] <- as.numeric(input$endInput)
 
                      vega_json[["padding"]][["top"]] <- input$loopHeightInput
                      vega_json[["width"]] <- as.numeric(input$widthInput)
-                     vega_json[["height"]] <- as.numeric(input$heightInput)
+                     vega_json[["signals"]][[8]][["value"]] <- as.numeric(input$spacingInput)
+                     
                      vega_json[["data"]][[2]][["values"]] <- create_list_for_json(custom_marker_data)
-                     vega_json[["data"]][[1]][["values"]] <- create_list_for_json(count_range_loop_data)
+                     vega_json[["data"]][[1]][["values"]] <- create_list_for_json(vega_loop_data)
+
                      
                      vega_json[["axes"]][[1]][["tickCount"]] <- as.numeric(input$ticksInput)
                      
@@ -425,10 +399,20 @@ shinyServer(function(input, output, session) {
                      {
                          
                          vega_json[["marks"]][[3]][["encode"]][["enter"]][["text"]][["field"]] <- "gene"
+                         vega_json[["marks"]][[3]][["encode"]][["update"]][["text"]][["field"]] <- "gene"
+                         #update bar tooltip to show gene
+                         vega_json[["marks"]][[1]][["encode"]][["hover"]][["tooltip"]][["signal"]] <- "datum.gene + ' ' + datum.chr + ':' + datum.bpstart + '-' + datum.bpend" 
+                         #update exon tooltip to show gene
+                         vega_json[["marks"]][[2]][["encode"]][["hover"]][["tooltip"]][["signal"]] <- "datum.gene + ' ' + datum.chr + ':' + datum.bpstart + '-' + datum.bpend" 
                      }
                      if(input$gtRadio=="Transcripts")
                      {
                          vega_json[["marks"]][[3]][["encode"]][["enter"]][["text"]][["field"]] <- "transcript"
+                         vega_json[["marks"]][[3]][["encode"]][["update"]][["text"]][["field"]] <- "transcript"
+                         #update bar tooltip to show transcript
+                         vega_json[["marks"]][[1]][["encode"]][["hover"]][["tooltip"]][["signal"]] <- "datum.transcript + ' ' + datum.chr + ':' + datum.bpstart + '-' + datum.bpend" 
+                         #update exon tooltip to show transcript
+                         vega_json[["marks"]][[2]][["encode"]][["hover"]][["tooltip"]][["signal"]] <- "datum.transcript + ' ' + datum.chr + ':' + datum.bpstart + '-' + datum.bpend" 
                      }
                      #tooltip to display count or the sample names
                      if("Count" %in% input$tooltipSelect && "Names" %in% input$tooltipSelect)
@@ -463,6 +447,7 @@ shinyServer(function(input, output, session) {
                      }
                      
                      jsonstring <- rjson::toJSON(vega_json)
+                     
                      vega <- as_vegaspec(jsonstring)
                      
                      output$vegatest <- renderVegawidget(
@@ -483,7 +468,6 @@ shinyServer(function(input, output, session) {
             {
                 row_list <- as.list(data[i,])
                 final_list[[i]] <- row_list
-                
             }
         }
         final_list
