@@ -17,7 +17,7 @@ shinyUI(tagList(
                                  p("This browser shows chromatin interaction regions, or loops, across 20 different dopamineric neuron samples. Positions are based on the hg38 reference genome. Users may click and drag the plot to move the x-axis, and may scroll on the plot to zoom. Genes, Transcripts and ATAC-seq peaks will only be visible in 10Mbp or smaller regions."),
                                  
                                  hr(),
-                                 selectInput("fileSelect",label = "Choose a Chromosome File", choices=c("1_all_samples_loops.bedpe")),
+                                 selectInput("fileSelect",label = "Choose a Chromosome File", choices=c("1_all_samples_hic.bedpe")),
                                  
                                  
                                  
